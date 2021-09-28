@@ -1,14 +1,17 @@
 mod structs;
 
-use reqwest::blocking::get as get_url;
-use std::fs;
-use std::path::{Path};
-use lazy_static::lazy_static;
-use std::fs::File;
-use std::io::{Write, Read};
+use chrono::{Duration, Local};
 use fs_extra::dir::{copy as copy_dir, CopyOptions};
+use lazy_static::lazy_static;
+use reqwest::blocking::get as get_url;
+use serbo::Manager;
+use std::fs;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
 
-const MC_VERSIONS_URL: &'static str = "https://gist.github.com/arthurbambou/9dfda822df99359ab9dbd8a1970ff66b/raw";
+const MC_VERSIONS_URL: &'static str =
+    "https://gist.github.com/arthurbambou/9dfda822df99359ab9dbd8a1970ff66b/raw";
 
 lazy_static! {
     static ref ROOT_PATH: &'static Path = Path::new(".");
@@ -17,32 +20,104 @@ lazy_static! {
 fn main() {
     let mut previous_version = String::from("");
     let mut server_updated = update_server(&previous_version);
-    while server_updated.is_some() {
-        previous_version = server_updated.unwrap();
-        server_updated = if backup_server(&previous_version).is_some() {
-            update_server(&previous_version)
-        } else { None }
+    match server_updated {
+        None => {}
+        Some(ver) => {
+            previous_version = ver;
+            server_updated = launch_server(&previous_version);
+            while server_updated.is_some() {
+                previous_version = server_updated.unwrap();
+                server_updated = if let Some(ver) = backup_server(&previous_version) {
+                    if let Some(ver) = update_server(&ver) {
+                        previous_version = ver;
+                        launch_server(&previous_version)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 
-fn backup_server(previous_version: &String) -> Option<String> {
-    let mut copy_opt = CopyOptions::new();
+fn launch_server(previous_version: &String) -> Option<String> {
+    let mut manager = Manager::new();
 
-    fs::create_dir(format!("./backup-{}", &previous_version)).ok()?;
+    manager.start(25565).ok()?;
+    println!("Starting server in: {}", previous_version);
+
+    let start_date = Local::now();
+
+    let stop_date = start_date + /*Duration::days(10);*/ Duration::minutes(5);
+
+    let warn_date = stop_date - Duration::minutes(5);
+
+    let mut warned = false;
+
+    loop {
+        if manager.is_online() {
+            let instance = manager.get().unwrap();
+
+            if !warned
+                && Local::now() >= warn_date
+                && instance.is_valid().is_ok()
+                && instance.is_valid().unwrap()
+            {
+                instance.send(format!(
+                    "say The server will stop in 5 minutes to upgrade to new version!"
+                )).ok()?;
+                instance.send(format!(
+                    "/say The server will stop in 5 minutes to upgrade to new version!"
+                )).ok()?;
+                warned = true;
+            } else if Local::now() >= stop_date
+                && instance.is_valid().is_ok()
+                && instance.is_valid().unwrap()
+            {
+                instance.send(format!("stop")).ok()?;
+                instance.stop().ok()?;
+                break;
+            } else if instance.is_valid().is_ok()
+                && !instance.is_valid().unwrap() {
+                break;
+            }
+        }
+    };
+
+    println!("Server stopped");
+
+    Some(previous_version.clone())
+}
+
+fn backup_server(previous_version: &String) -> Option<String> {
+    let copy_opt = CopyOptions::new();
+
+    fs::create_dir(format!("./backup-{}", &previous_version));
 
     copy_dir(
         "./server",
-        format!("./backup-{}", previous_version),
-        &copy_opt
-    ).ok()?;
+        format!("./backup-{}", &previous_version),
+        &copy_opt,
+    );
 
-    Some(String::from(""))
+    println!("Server backuped");
+
+    Some(previous_version.clone())
 }
 
 fn update_server(previous_version: &String) -> Option<String> {
+    println!("hmm");
     let file = get_url(MC_VERSIONS_URL).ok()?;
 
-    let version_vec = structs::parse_version_manifest(file.text().ok()?.as_str()).ok()?.versions;
+    println!("Got file");
+
+    let version_vec = structs::parse_version_manifest(file.text().ok()?.as_str())
+        .ok()?
+        .versions;
+
+    println!("{}", version_vec.len());
 
     let version = if previous_version.is_empty() {
         version_vec.first()?
@@ -57,7 +132,8 @@ fn update_server(previous_version: &String) -> Option<String> {
         }
 
         version_vec.get(int)?
-    }.clone();
+    }
+    .clone();
 
     let server_dir = ROOT_PATH.clone().join("server");
 
@@ -78,6 +154,8 @@ fn update_server(previous_version: &String) -> Option<String> {
     let mut server_jar_file = File::create(server_jar).ok()?;
 
     server_jar_file.write(&body).ok()?;
+
+    println!("Server updated from version {} to version {}", previous_version, version.name.clone());
 
     Some(version.name)
 }
