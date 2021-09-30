@@ -77,12 +77,19 @@ fn launch_server(previous_version: &String) -> Option<String> {
                 && instance.is_valid().unwrap()
             {
                 instance.send(format!("stop")).ok()?;
-                instance.stop().ok()?;
+                instance.started();
                 break;
             } else if instance.is_valid().is_ok()
                 && !instance.is_valid().unwrap() {
                 break;
             }
+        }
+    };
+
+    match manager.stop() {
+        Ok(_) => {}
+        Err(err) => {
+            println!("Error while stopping server: {}", err)
         }
     };
 

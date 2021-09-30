@@ -678,8 +678,8 @@ dependencies = [
 
 [[package]]
 name = "serbo-mc"
-version = "0.1.1"
-source = "git+https://github.com/arthurbambou/Serbo#8717faf6508e87690f04aecdb17624234db3744c"
+version = "0.1.5"
+source = "git+https://github.com/arthurbambou/Serbo#cbf804765741f4e881c8ee6cd87c31ca36f5d5bc"
 
 [[package]]
 name = "serde"
