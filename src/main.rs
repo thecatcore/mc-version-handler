@@ -50,7 +50,7 @@ fn launch_server(previous_version: &String) -> Option<String> {
 
     let start_date = Local::now();
 
-    let stop_date = start_date + /*Duration::days(10);*/ Duration::minutes(5);
+    let stop_date = start_date + Duration::days(7); //Duration::minutes(5);
 
     let warn_date = stop_date - Duration::minutes(5);
 
@@ -67,9 +67,6 @@ fn launch_server(previous_version: &String) -> Option<String> {
             {
                 instance.send(format!(
                     "say The server will stop in 5 minutes to upgrade to new version!"
-                )).ok()?;
-                instance.send(format!(
-                    "/say The server will stop in 5 minutes to upgrade to new version!"
                 )).ok()?;
                 warned = true;
             } else if Local::now() >= stop_date
